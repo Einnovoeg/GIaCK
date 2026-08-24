@@ -1,0 +1,86 @@
+# macOS / Xcode
+.DS_Store
+*.xcuserstate
+project.xcworkspace/
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Build artifacts
+.build/
+*.o
+*.lo
+*.la
+*.obj
+*.exe
+*.out
+*.app
+*.i*s
+*.map
+*.lnk
+*.pdb
+
+# Package manager artifacts
+.package.resolved
+Pods/
+Podfile.lock
+
+# Logs
+*.log
+
+# Cache and temporary files
+.cache
+*.tmp
+*.temp
+*/.tmp/
+*/.temp/
+
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/project.xcworkspace/
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/xcuserdata/
+
+# Swift Package Manager
+.pins
+.swiftpm/
+
+# App Archives
+*.ipa
+*.app.zip
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/
+Carthage/Build/
+Carthage/Checkouts/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# CodeKit
+**/.codekit*
+
+# Mongo Guardian
+*.mongo
+
+# Secrets
+*.secret
+*.env
+.env.*
+
+# Apple
+*.mobileprovision
+*.certificater
+
+# App Store
+*.pkg

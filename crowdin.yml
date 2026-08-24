@@ -1,0 +1,4 @@
+files:
+  - source: /GIACK/Localizable.xcstrings
+    translation: /GIACK/Localizable.xcstrings
+    multilingual: 1
