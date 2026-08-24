@@ -348,8 +348,14 @@ struct SettingsView: View {
                     set: { newValue in
                         selectedWineRuntimeSelection = newValue.rawValue
                         GIACKWineInstaller.setSelectedRuntimeSelection(newValue)
-                        Task {
-                            await refreshRunnerStatus()
+                        if newValue != .gptkManaged {
+                            Task {
+                                await installOrUpdateSelectedWineRuntime()
+                            }
+                        } else {
+                            Task {
+                                await refreshRunnerStatus()
+                            }
                         }
                     }
                 )) {
