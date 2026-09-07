@@ -141,6 +141,19 @@ public enum BottlePreset: String, CaseIterable, Codable, Identifiable, Sendable 
             return .classicDOSGame
         }
     }
+
+    public var recommendedRuntimeSummary: String? {
+        switch self {
+        case .blankWine, .windowsGame:
+            return "Recommended: Managed GPTK or Wine 11 Stable"
+        case .gameLauncher:
+            return "Recommended: Wine 11 Stable for launchers"
+        case .windowsUtility:
+            return "Recommended: Wine 11 Stable (conservative)"
+        case .blankDOS, .classicDOSGame:
+            return "Recommended: DOSBox Staging"
+        }
+    }
 }
 
 public extension BottleSettings {

@@ -21,8 +21,14 @@ import SemanticVersion
 
 enum SetupStage {
     case rosetta
-    case whiskyWineDownload
-    case whiskyWineInstall
+    case giackWineDownload
+    case giackWineInstall
+
+    @available(*, deprecated, renamed: "giackWineDownload")
+    static var whiskyWineDownload: Self { .giackWineDownload }
+
+    @available(*, deprecated, renamed: "giackWineInstall")
+    static var whiskyWineInstall: Self { .giackWineInstall }
 }
 
 struct SetupView: View {
@@ -44,7 +50,7 @@ struct SetupView: View {
                         switch stage {
                         case .rosetta:
                             RosettaView(path: $path, showSetup: $showSetup)
-                        case .whiskyWineDownload:
+                        case .giackWineDownload:
                             GIACKWineDownloadView(
                                 tarLocation: $tarLocation,
                                 runtimeVersion: $runtimeVersion,
@@ -52,7 +58,7 @@ struct SetupView: View {
                                 runtimeReleaseName: $runtimeReleaseName,
                                 path: $path
                             )
-                        case .whiskyWineInstall:
+                        case .giackWineInstall:
                             GIACKWineInstallView(
                                 tarLocation: $tarLocation,
                                 runtimeVersion: $runtimeVersion,
@@ -65,10 +71,10 @@ struct SetupView: View {
                     }
             }
             .frame(width: useGlassUI ? 440 : nil, height: useGlassUI ? 280 : nil)
-            .whiskyGlassCard(cornerRadius: 24)
+            .giackGlassCard(cornerRadius: 24)
         }
         .padding(useGlassUI ? 20 : 8)
-        .whiskyWindowBackground()
+        .giackWindowBackground()
         .interactiveDismissDisabled()
     }
 }

@@ -18,6 +18,8 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
+import Combine
 import GIACKKit
 
 enum BottleStage: String, CaseIterable, Identifiable {
@@ -88,6 +90,10 @@ struct BottleView: View {
             .onChange(of: bottle.runner) {
                 normalizeSelectedStage()
             }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GIACKShowBottleConfig"))) { notification in
+                guard let url = notification.object as? URL, url == bottle.url else { return }
+                selectedStage = .config
+            }
             .navigationDestination(for: Program.self) { program in
                 ProgramView(program: program)
             }
@@ -135,6 +141,9 @@ struct BottleView: View {
                     pinGridLayout: pinGridLayout,
                     useGlassUI: useGlassUI
                 )
+                if bottle.runner == .wine {
+                    BottleRuntimeStatusSection(bottle: bottle, useGlassUI: useGlassUI)
+                }
                 OverviewMetricsSection(bottle: bottle)
                 BottleDetailsSection(bottle: bottle, useGlassUI: useGlassUI)
             }
@@ -325,13 +334,14 @@ private struct BottleHeaderView: View {
 
             statusBadges
         }
-        .whiskyPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
+        .giackPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
     }
 
     private var statusBadges: some View {
         ViewThatFits {
             HStack(spacing: 8) {
                 if bottle.runner == .wine {
+                    statusBadge(title: runtimeBadgeTitle, icon: "shippingbox.fill", tint: runtimeBadgeTint)
                     statusBadge(title: bottle.settings.windowsVersion.pretty(), icon: "desktopcomputer", tint: .blue)
                     statusBadge(title: renderLabel, icon: bottle.settings.dxvk ? "bolt.fill" : "sparkles", tint: bottle.settings.dxvk ? .orange : .green)
                     statusBadge(title: syncLabel, icon: "speedometer", tint: .pink)
@@ -345,6 +355,7 @@ private struct BottleHeaderView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 if bottle.runner == .wine {
+                    statusBadge(title: runtimeBadgeTitle, icon: "shippingbox.fill", tint: runtimeBadgeTint)
                     statusBadge(title: bottle.settings.windowsVersion.pretty(), icon: "desktopcomputer", tint: .blue)
                     statusBadge(title: renderLabel, icon: bottle.settings.dxvk ? "bolt.fill" : "sparkles", tint: bottle.settings.dxvk ? .orange : .green)
                     statusBadge(title: syncLabel, icon: "speedometer", tint: .pink)
@@ -356,6 +367,19 @@ private struct BottleHeaderView: View {
                 }
             }
         }
+    }
+
+    private var runtimeBadgeTitle: String {
+        let selection = bottle.settings.effectiveWineRuntime
+        let isOverridden = bottle.settings.perBottleWineRuntimeSelection != nil
+        if let runtime = GIACKWineInstaller.runtime(for: selection) {
+            return isOverridden ? "\(runtime.displayName) • Per-Bottle" : runtime.displayName
+        }
+        return isOverridden ? "\(selection.displayName) • Missing" : selection.displayName
+    }
+
+    private var runtimeBadgeTint: Color {
+        GIACKWineInstaller.isRuntimeInstalled(for: bottle.settings.effectiveWineRuntime) ? .teal : .orange
     }
 
     private func statusBadge(title: String, icon: String, tint: Color) -> some View {
@@ -416,6 +440,7 @@ private struct OverviewMetricsSection: View {
 
             LazyVGrid(columns: metricGrid, alignment: .leading, spacing: 12) {
                 if bottle.runner == .wine {
+                    OverviewMetricCard(label: "Runtime", value: runtimeMetricValue, icon: "shippingbox.fill", tint: runtimeMetricTint)
                     OverviewMetricCard(label: "Windows", value: bottle.settings.windowsVersion.pretty(), icon: "desktopcomputer", tint: .blue)
                     OverviewMetricCard(label: "Graphics", value: bottle.settings.dxvk ? "DXVK" : "D3DMetal", icon: bottle.settings.dxvk ? "bolt.fill" : "sparkles", tint: bottle.settings.dxvk ? .orange : .green)
                     OverviewMetricCard(label: "Sync", value: syncLabel, icon: "speedometer", tint: .pink)
@@ -426,7 +451,7 @@ private struct OverviewMetricsSection: View {
                 }
             }
         }
-        .whiskyPanelCard(cornerRadius: 20)
+        .giackPanelCard(cornerRadius: 20)
     }
 
     private var syncLabel: String {
@@ -438,6 +463,18 @@ private struct OverviewMetricsSection: View {
         case .msync:
             return "MSync"
         }
+    }
+
+    private var runtimeMetricValue: String {
+        let selection = bottle.settings.effectiveWineRuntime
+        if let runtime = GIACKWineInstaller.runtime(for: selection) {
+            return runtime.displayName
+        }
+        return "\(selection.displayName) (Missing)"
+    }
+
+    private var runtimeMetricTint: Color {
+        GIACKWineInstaller.isRuntimeInstalled(for: bottle.settings.effectiveWineRuntime) ? .teal : .orange
     }
 }
 
@@ -514,7 +551,7 @@ private struct PinnedProgramsSection: View {
                 PinAddView(bottle: bottle)
             }
         }
-        .whiskyPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
+        .giackPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
     }
 }
 
@@ -522,6 +559,7 @@ private struct BottleDetailsSection: View {
     let bottle: Bottle
     let useGlassUI: Bool
     @State private var showsDetails = false
+    @AppStorage("selectedWineRuntimeSelection") private var globalWineRuntimeRaw: String = GIACKWineInstaller.RuntimeSelection.gptkManaged.rawValue
 
     var body: some View {
         DisclosureGroup("Library Details", isExpanded: $showsDetails) {
@@ -532,6 +570,9 @@ private struct BottleDetailsSection: View {
                 BottleDetailRow(label: "Pinned Programs", value: String(bottle.pinnedPrograms.count))
 
                 if bottle.runner == .wine {
+                    BottleDetailRow(label: "Effective Runtime", value: GIACKWineInstaller.runtimeSummary(for: bottle.settings.effectiveWineRuntime), selectable: true)
+                    BottleDetailRow(label: "Global Runtime", value: globalRuntimeLabel)
+                    BottleDetailRow(label: "Runtime Scope", value: bottle.settings.perBottleWineRuntimeSelection == nil ? "Global" : "Per-Bottle Override")
                     BottleDetailRow(label: "Windows Version", value: bottle.settings.windowsVersion.pretty())
                     BottleDetailRow(label: "Graphics", value: bottle.settings.dxvk ? "DXVK" : "D3DMetal")
                     BottleDetailRow(label: "Sync", value: syncLabel)
@@ -546,7 +587,12 @@ private struct BottleDetailsSection: View {
             }
             .padding(.top, 10)
         }
-        .whiskyPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
+        .giackPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
+    }
+
+    private var globalRuntimeLabel: String {
+        let sel = GIACKWineInstaller.RuntimeSelection(rawValue: globalWineRuntimeRaw) ?? .gptkManaged
+        return sel.displayName
     }
 
     private var syncLabel: String {
@@ -558,6 +604,117 @@ private struct BottleDetailsSection: View {
         case .msync:
             return "MSync"
         }
+    }
+}
+
+private struct BottleRuntimeStatusSection: View {
+    @ObservedObject var bottle: Bottle
+    let useGlassUI: Bool
+    @AppStorage("selectedWineRuntimeSelection") private var globalWineRuntimeRaw: String = GIACKWineInstaller.RuntimeSelection.gptkManaged.rawValue
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "shippingbox.fill")
+                    .foregroundStyle(runtimeTint)
+                Text("Wine Runtime")
+                    .font(.headline)
+                Spacer()
+                Text(scopeLabel)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(scopeTint.opacity(0.14), in: Capsule())
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                GridRow {
+                    Text("Effective")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    Text(effectiveSummary)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                }
+                GridRow {
+                    Text("Global")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    Text(globalDisplayName)
+                        .font(.caption)
+                }
+                if let binaryPath = effectiveBinaryPath {
+                    GridRow {
+                        Text("Binary")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                        Text(binaryPath)
+                            .font(.caption2)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                    }
+                }
+            }
+
+            if !isInstalled {
+                Label {
+                    Text("This runtime is not installed. Install it in Settings → Runners or change the per-bottle override in Config.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button("Change in Config") {
+                    // Config tab is reachable via the stage picker; use notification to hint.
+                    NotificationCenter.default.post(name: .init("GIACKShowBottleConfig"), object: bottle.url)
+                }
+                .help("Open the Config tab to change this bottle's runtime override.")
+
+                Button("Open Runners Settings") {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                .help("Open Settings → Runners to manage Homebrew runtimes.")
+            }
+            .font(.caption)
+        }
+        .giackPanelCard(cornerRadius: 20, padding: useGlassUI ? 18 : 16)
+    }
+
+    private var effectiveSelection: GIACKWineInstaller.RuntimeSelection {
+        bottle.settings.effectiveWineRuntime
+    }
+
+    private var effectiveSummary: String {
+        GIACKWineInstaller.runtimeSummary(for: effectiveSelection)
+    }
+
+    private var globalDisplayName: String {
+        let sel = GIACKWineInstaller.RuntimeSelection(rawValue: globalWineRuntimeRaw) ?? .gptkManaged
+        return GIACKWineInstaller.runtimeSummary(for: sel)
+    }
+
+    private var effectiveBinaryPath: String? {
+        GIACKWineInstaller.runtime(for: effectiveSelection)?.wineBinaryURL.path(percentEncoded: false)
+    }
+
+    private var isInstalled: Bool {
+        GIACKWineInstaller.isRuntimeInstalled(for: effectiveSelection)
+    }
+
+    private var scopeLabel: String {
+        bottle.settings.perBottleWineRuntimeSelection == nil ? "Global" : "Per-Bottle"
+    }
+
+    private var scopeTint: Color {
+        bottle.settings.perBottleWineRuntimeSelection == nil ? .secondary : .teal
+    }
+
+    private var runtimeTint: Color {
+        isInstalled ? .teal : .orange
     }
 }
 

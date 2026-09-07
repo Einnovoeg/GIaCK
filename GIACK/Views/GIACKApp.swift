@@ -54,7 +54,7 @@ struct GIACKApp: App {
                     }
                 }
         }
-        .handlesExternalEvents(preferring: [], allowing: ["*"])
+        .handlesExternalEvents(matching: ["*"])
         .commands {
             CommandGroup(after: .appInfo) {
                 if let updater = updaterController?.updater {

@@ -244,7 +244,10 @@ extension GIACK {
     struct Uninstall: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Uninstall the GPTK runtime.")
 
-        @Flag(name: [.long, .short], help: "Uninstall the GPTK runtime") var whiskyWine = false
+        @Flag(name: [.long, .short], help: "Uninstall the GPTK runtime") var giackWine = false
+
+        @available(*, deprecated, renamed: "giackWine")
+        var whiskyWine: Bool { giackWine }
 
         mutating func run() throws {
 

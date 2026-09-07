@@ -110,7 +110,7 @@ extension URL {
         let displayName = Bundle.appDisplayName
         var prettyPath = path(percentEncoded: false)
         prettyPath = prettyPath
-            .replacingOccurrences(of: Bundle.main.bundleIdentifier ?? Bundle.whiskyBundleIdentifier, with: displayName)
+            .replacingOccurrences(of: Bundle.main.bundleIdentifier ?? Bundle.giackBundleIdentifier, with: displayName)
             .replacingOccurrences(of: "/Users/\(NSUserName())", with: "~")
         return prettyPath
     }

@@ -21,11 +21,11 @@ import AppKit
 
 class GIACKCmd {
     static func install() async {
-        let whiskyCmdURL = Bundle.main.url(forResource: "GIACKCmd", withExtension: nil)
+        let giackCmdURL = Bundle.main.url(forResource: "GIACKCmd", withExtension: nil)
 
-        if let whiskyCmdURL = whiskyCmdURL {
-            let escapedPath = whiskyCmdURL.path(percentEncoded: false).replacingOccurrences(of: "'", with: "'\\''")
-            let shellCommand = "ln -fs '\(escapedPath)' /usr/local/bin/whisky"
+        if let giackCmdURL = giackCmdURL {
+            let escapedPath = giackCmdURL.path(percentEncoded: false).replacingOccurrences(of: "'", with: "'\\''")
+            let shellCommand = "ln -fs '\(escapedPath)' /usr/local/bin/giack && ln -fs '\(escapedPath)' /usr/local/bin/whisky"
             let script = """
             do shell script "\(shellCommand.appleScriptEscaped)" with administrator privileges
             """

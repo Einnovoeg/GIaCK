@@ -60,12 +60,12 @@ enum ProjectInfo {
     static let displayName = Bundle.appDisplayName
     /// Public project URLs are centralized so downstream maintainers can replace
     /// them without scattering host-specific links throughout the application.
-    static let repositoryURL = URL(string: "https://github.com/GIACK-App/GIACK") ?? fallbackURL
+    static let repositoryURL = URL(string: "https://github.com/Einnovoeg/GIaCK") ?? fallbackURL
     static let releasesURL = repositoryURL.appending(path: "releases")
     static let issuesURL = repositoryURL.appending(path: "issues")
-    static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/GIACK-App/GIACK/releases/latest")
+    static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/Einnovoeg/GIaCK/releases/latest")
     static let applicationDatabaseURL = URL(
-        string: "https://raw.githubusercontent.com/GIACK-App/GIACK/main/GIACK/Resources/ApplicationDatabase.json"
+        string: "https://raw.githubusercontent.com/Einnovoeg/GIaCK/main/GIACK/Resources/ApplicationDatabase.json"
     )
     static let fundingURL = URL(string: "https://buymeacoffee.com/einnovoeg") ?? fallbackURL
 

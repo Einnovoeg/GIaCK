@@ -20,8 +20,11 @@ import Foundation
 import os.log
 
 public extension Logger {
-  /// A global logger for WineKit
+  /// A global logger for WineKit - now GIaCKKit
   static let wineKit = Logger(
-      subsystem: Bundle.whiskyBundleIdentifier, category: "WineKit"
+      subsystem: Bundle.giackBundleIdentifier, category: "WineKit"
   )
+  /// Legacy alias preserved for compatibility
+  @available(*, deprecated, renamed: "wineKit")
+  static let whiskyKit = wineKit
 }

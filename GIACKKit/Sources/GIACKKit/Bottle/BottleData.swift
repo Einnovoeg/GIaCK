@@ -27,7 +27,7 @@ public struct BottleData: Codable {
     public static let containerDir = FileManager.default.homeDirectoryForCurrentUser
         .appending(path: "Library")
         .appending(path: "Containers")
-        .appending(path: Bundle.whiskyBundleIdentifier)
+        .appending(path: Bundle.giackBundleIdentifier)
 
     public static let bottleEntriesDir = containerDir
         .appending(path: "BottleVM")

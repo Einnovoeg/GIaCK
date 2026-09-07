@@ -29,7 +29,7 @@ class ThumbnailProvider: QLThumbnailProvider {
 
         // % of thumbnail occupied by icon
         let iconScaleFactor = 0.9
-        let whiskyIconScaleFactor = 0.4
+        let giackIconScaleFactor = 0.4
 
         // AppKit coordinate system origin is in the bottom-left
         // Icon is centered
@@ -39,10 +39,10 @@ class ThumbnailProvider: QLThumbnailProvider {
                                height: request.maximumSize.height * iconScaleFactor)
 
         // GIACK icon is aligned bottom-right
-        let whiskyIconFrame = CGRect(x: request.maximumSize.width - request.maximumSize.width * whiskyIconScaleFactor,
+        let giackIconFrame = CGRect(x: request.maximumSize.width - request.maximumSize.width * giackIconScaleFactor,
                                      y: 0,
-                                     width: request.maximumSize.width * whiskyIconScaleFactor,
-                                     height: request.maximumSize.height * whiskyIconScaleFactor)
+                                     width: request.maximumSize.width * giackIconScaleFactor,
+                                     height: request.maximumSize.height * giackIconScaleFactor)
         do {
             var image: NSImage?
 
@@ -52,8 +52,8 @@ class ThumbnailProvider: QLThumbnailProvider {
             let reply: QLThumbnailReply = QLThumbnailReply.init(contextSize: thumbnailSize) { () -> Bool in
                 if let image = image {
                     image.draw(in: iconFrame)
-                    let whiskyIcon = NSImage(named: NSImage.Name("Icon"))
-                    whiskyIcon?.draw(in: whiskyIconFrame, from: .zero, operation: .sourceOver, fraction: 1)
+                    let giackIcon = NSImage(named: NSImage.Name("Icon"))
+                    giackIcon?.draw(in: giackIconFrame, from: .zero, operation: .sourceOver, fraction: 1)
                     return true
                 }
 

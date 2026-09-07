@@ -23,6 +23,13 @@ DerivedData/
 *.lnk
 *.pdb
 
+# Project-local agent / session notes (do not publish)
+AGENTS.md
+AGENT_HANDOFF.md
+SESSION_LOG*.md
+SESSION_*.md
+session*.md
+
 # Package manager artifacts
 .package.resolved
 Pods/

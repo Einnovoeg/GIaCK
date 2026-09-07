@@ -20,17 +20,41 @@ import Foundation
 import os.log
 
 public class Wine {
-    private static let logger = Logger(subsystem: Bundle.whiskyBundleIdentifier, category: "Wine")
+    private static let logger = Logger(subsystem: Bundle.giackBundleIdentifier, category: "Wine")
 
     /// URL to the installed `DXVK` folder
     private static let dxvkFolder: URL = GIACKWineInstaller.libraryFolder.appending(path: "DXVK")
-    /// Path to the `wine64` binary
+
+    /// Path to the `wine64` binary - global selection
     public static var wineBinary: URL {
         GIACKWineInstaller.wineBinaryURL() ?? GIACKWineInstaller.binFolder.appending(path: "wine64")
     }
-    /// Parth to the `wineserver` binary
+
+    /// Per-bottle wine binary - respects per-bottle runtime override when available
+    public static func wineBinary(for bottle: Bottle?) -> URL {
+        if let bottle {
+            let selection = bottle.settings.effectiveWineRuntime
+            if let url = GIACKWineInstaller.wineBinaryURL(for: selection) {
+                return url
+            }
+        }
+        return wineBinary
+    }
+
+    /// Path to the `wineserver` binary - global selection
     private static var wineserverBinary: URL {
         GIACKWineInstaller.wineserverBinaryURL() ?? GIACKWineInstaller.binFolder.appending(path: "wineserver")
+    }
+
+    /// Per-bottle wineserver binary
+    private static func wineserverBinary(for bottle: Bottle?) -> URL {
+        if let bottle {
+            let selection = bottle.settings.effectiveWineRuntime
+            if let url = GIACKWineInstaller.wineserverBinaryURL(for: selection) {
+                return url
+            }
+        }
+        return wineserverBinary
     }
 
     /// Run a process on a executable file given by the `executableURL`
@@ -61,6 +85,17 @@ public class Wine {
         )
     }
 
+    /// Run a `wine` process for a specific bottle's runtime
+    private static func runWineProcess(
+        name: String? = nil, args: [String], environment: [String: String] = [:],
+        bottle: Bottle, fileHandle: FileHandle?
+    ) throws -> AsyncStream<ProcessOutput> {
+        return try runProcess(
+            name: name, args: args, environment: environment, executableURL: wineBinary(for: bottle),
+            fileHandle: fileHandle
+        )
+    }
+
     /// Run a `wineserver` process with the given arguments and environment variables returning a stream of output
     private static func runWineserverProcess(
         name: String? = nil, args: [String], environment: [String: String] = [:],
@@ -68,6 +103,17 @@ public class Wine {
     ) throws -> AsyncStream<ProcessOutput> {
         return try runProcess(
             name: name, args: args, environment: environment, executableURL: wineserverBinary,
+            fileHandle: fileHandle
+        )
+    }
+
+    /// Run a `wineserver` process for a specific bottle's runtime
+    private static func runWineserverProcess(
+        name: String? = nil, args: [String], environment: [String: String] = [:],
+        bottle: Bottle, fileHandle: FileHandle?
+    ) throws -> AsyncStream<ProcessOutput> {
+        return try runProcess(
+            name: name, args: args, environment: environment, executableURL: wineserverBinary(for: bottle),
             fileHandle: fileHandle
         )
     }
@@ -83,7 +129,7 @@ public class Wine {
         return try runWineProcess(
             name: name, args: args,
             environment: constructWineEnvironment(for: bottle, environment: environment),
-            fileHandle: fileHandle
+            bottle: bottle, fileHandle: fileHandle
         )
     }
 
@@ -98,7 +144,7 @@ public class Wine {
         return try runWineserverProcess(
             name: name, args: args,
             environment: constructWineServerEnvironment(for: bottle, environment: environment),
-            fileHandle: fileHandle
+            bottle: bottle, fileHandle: fileHandle
         )
     }
 
@@ -120,8 +166,9 @@ public class Wine {
     public static func generateRunCommand(
         at url: URL, bottle: Bottle, args: String, environment: [String: String]
     ) -> String {
+        let bottleWineBinary = wineBinary(for: bottle)
         let parsedArguments = String.shellSplit(args)
-        var wineCmd = ([wineBinary.path(percentEncoded: false), "start", "/unix", url.path(percentEncoded: false)]
+        var wineCmd = ([bottleWineBinary.path(percentEncoded: false), "start", "/unix", url.path(percentEncoded: false)]
             + parsedArguments)
             .map(\.esc)
             .joined(separator: " ")
@@ -135,23 +182,24 @@ public class Wine {
     }
 
     public static func generateTerminalEnvironmentCommand(bottle: Bottle) -> String {
-        let binDirectory = GIACKWineInstaller.wineBinDirectoryURL() ?? GIACKWineInstaller.binFolder
-        let wineBinaryName = wineBinary.lastPathComponent
+        let bottleWineBinary = wineBinary(for: bottle)
+        let binDirectory = GIACKWineInstaller.wineBinDirectoryURL(for: bottle.settings.effectiveWineRuntime) ?? GIACKWineInstaller.wineBinDirectoryURL() ?? GIACKWineInstaller.binFolder
+        let wineBinaryName = bottleWineBinary.lastPathComponent
         var cmd = """
         export PATH=\"\(binDirectory.path):$PATH\"
         export WINE=\"\(wineBinaryName)\"
-        alias wine=\"\(wineBinary.path.esc)\"
+        alias wine=\"\(bottleWineBinary.path.esc)\"
         """
 
-        cmd += "\n" + shellAlias(named: "winecfg", fallback: "\(wineBinaryName) winecfg")
-        cmd += "\n" + shellAlias(named: "msiexec", fallback: "\(wineBinaryName) msiexec")
-        cmd += "\n" + shellAlias(named: "regedit", fallback: "\(wineBinaryName) regedit")
-        cmd += "\n" + shellAlias(named: "regsvr32", fallback: "\(wineBinaryName) regsvr32")
-        cmd += "\n" + shellAlias(named: "wineboot", fallback: "\(wineBinaryName) wineboot")
-        cmd += "\n" + shellAlias(named: "wineconsole", fallback: "\(wineBinaryName) wineconsole")
-        cmd += "\n" + shellAlias(named: "winedbg", fallback: "\(wineBinaryName) winedbg")
-        cmd += "\n" + shellAlias(named: "winefile", fallback: "\(wineBinaryName) winefile")
-        cmd += "\n" + shellAlias(named: "winepath", fallback: "\(wineBinaryName) winepath")
+        cmd += "\n" + shellAlias(named: "winecfg", fallback: "\(wineBinaryName) winecfg", for: bottle)
+        cmd += "\n" + shellAlias(named: "msiexec", fallback: "\(wineBinaryName) msiexec", for: bottle)
+        cmd += "\n" + shellAlias(named: "regedit", fallback: "\(wineBinaryName) regedit", for: bottle)
+        cmd += "\n" + shellAlias(named: "regsvr32", fallback: "\(wineBinaryName) regsvr32", for: bottle)
+        cmd += "\n" + shellAlias(named: "wineboot", fallback: "\(wineBinaryName) wineboot", for: bottle)
+        cmd += "\n" + shellAlias(named: "wineconsole", fallback: "\(wineBinaryName) wineconsole", for: bottle)
+        cmd += "\n" + shellAlias(named: "winedbg", fallback: "\(wineBinaryName) winedbg", for: bottle)
+        cmd += "\n" + shellAlias(named: "winefile", fallback: "\(wineBinaryName) winefile", for: bottle)
+        cmd += "\n" + shellAlias(named: "winepath", fallback: "\(wineBinaryName) winepath", for: bottle)
 
         let env = constructWineEnvironment(for: bottle, environment: constructWineEnvironment(for: bottle))
         for environment in env {
@@ -168,8 +216,20 @@ public class Wine {
         return "alias \(name)=\(fallback.esc)"
     }
 
+    private static func shellAlias(named name: String, fallback: String, for bottle: Bottle) -> String {
+        let selection = bottle.settings.effectiveWineRuntime
+        if let toolURL = GIACKWineInstaller.wineToolBinaryURL(named: name, for: selection) {
+            return "alias \(name)=\(toolURL.path.esc)"
+        }
+        if let toolURL = GIACKWineInstaller.wineToolBinaryURL(named: name) {
+            return "alias \(name)=\(toolURL.path.esc)"
+        }
+        return "alias \(name)=\(fallback.esc)"
+    }
+
     private static func runWineTool(_ tool: String, args: [String], bottle: Bottle) async throws -> String {
-        if let executableURL = GIACKWineInstaller.wineToolBinaryURL(named: tool) {
+        let selection = bottle.settings.effectiveWineRuntime
+        if let executableURL = GIACKWineInstaller.wineToolBinaryURL(named: tool, for: selection) ?? GIACKWineInstaller.wineToolBinaryURL(named: tool) {
             var result: [String] = []
             let fileHandle = try makeFileHandle()
             fileHandle.writeApplicationInfo()
@@ -329,7 +389,7 @@ enum RegistryType: String {
 extension Wine {
     public static let logsFolder = FileManager.default.urls(
         for: .libraryDirectory, in: .userDomainMask
-    )[0].appending(path: "Logs").appending(path: Bundle.whiskyBundleIdentifier)
+    )[0].appending(path: "Logs").appending(path: Bundle.giackBundleIdentifier)
 
     public static func makeFileHandle() throws -> FileHandle {
         if !FileManager.default.fileExists(atPath: Self.logsFolder.path) {

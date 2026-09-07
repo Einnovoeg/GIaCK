@@ -46,17 +46,28 @@ struct GIACKBrandIcon: View {
 }
 
 extension View {
-    func whiskyWindowBackground() -> some View {
+    func giackWindowBackground() -> some View {
         modifier(GIACKWindowBackground())
     }
 
-    func whiskyPanelCard(cornerRadius: CGFloat = 22, padding: CGFloat = 16) -> some View {
+    func giackPanelCard(cornerRadius: CGFloat = 22, padding: CGFloat = 16) -> some View {
         modifier(GIACKPanelCard(cornerRadius: cornerRadius, padding: padding))
     }
 
-    func whiskyGlassCard(cornerRadius: CGFloat = 22) -> some View {
+    func giackGlassCard(cornerRadius: CGFloat = 22) -> some View {
         modifier(GIACKGlassCard(cornerRadius: cornerRadius))
     }
+
+    @available(*, deprecated, renamed: "giackWindowBackground")
+    func whiskyWindowBackground() -> some View { giackWindowBackground() }
+
+    @available(*, deprecated, renamed: "giackPanelCard")
+    func whiskyPanelCard(cornerRadius: CGFloat = 22, padding: CGFloat = 16) -> some View {
+        giackPanelCard(cornerRadius: cornerRadius, padding: padding)
+    }
+
+    @available(*, deprecated, renamed: "giackGlassCard")
+    func whiskyGlassCard(cornerRadius: CGFloat = 22) -> some View { giackGlassCard(cornerRadius: cornerRadius) }
 }
 
 struct GIACKGlassBadge: View {

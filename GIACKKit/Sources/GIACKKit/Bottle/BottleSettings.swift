@@ -130,7 +130,7 @@ public enum WinVersion: String, CaseIterable, Codable, Sendable {
     }
 }
 
-public enum EnhancedSync: Codable, Equatable {
+public enum EnhancedSync: Codable, Equatable, Sendable {
     case none, esync, msync
 }
 
@@ -217,7 +217,7 @@ public enum DOSBoxScaler: String, CaseIterable, Codable, Sendable {
 }
 
 public struct BottleWineConfig: Codable, Equatable {
-    static let defaultWineVersion = SemanticVersion(7, 7, 0)
+    static let defaultWineVersion = SemanticVersion(11, 0, 0)
     var wineVersion: SemanticVersion = Self.defaultWineVersion
     var windowsVersion: WinVersion = .win10
     var enhancedSync: EnhancedSync = .msync
@@ -295,6 +295,26 @@ public struct BottleDOSBoxConfig: Codable, Equatable {
     }
 }
 
+/// Defines how a bottle manages its applications.
+public enum BottleAppMode: String, CaseIterable, Codable, Sendable {
+    case singleApp
+    case multiApp
+
+    public var displayName: String {
+        switch self {
+        case .singleApp: return "Single Application"
+        case .multiApp: return "Multiple Applications"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .singleApp: return "Isolated bottle for one application - best compatibility"
+        case .multiApp: return "Shared bottle for multiple applications - saves disk space"
+        }
+    }
+}
+
 public struct BottleSettings: Codable, Equatable {
     static let defaultFileVersion = SemanticVersion(1, 0, 0)
 
@@ -306,6 +326,8 @@ public struct BottleSettings: Codable, Equatable {
     private var metalConfig: BottleMetalConfig
     private var dxvkConfig: BottleDXVKConfig
     private var dosboxConfig: BottleDOSBoxConfig
+    private var appMode: BottleAppMode
+    private var perBottleWineRuntime: GIACKWineInstaller.RuntimeSelection?
 
     public init() {
         self.preset = .windowsGame
@@ -315,6 +337,8 @@ public struct BottleSettings: Codable, Equatable {
         self.metalConfig = BottleMetalConfig()
         self.dxvkConfig = BottleDXVKConfig()
         self.dosboxConfig = BottleDOSBoxConfig()
+        self.appMode = .singleApp
+        self.perBottleWineRuntime = nil
     }
 
     // swiftlint:disable line_length
@@ -328,6 +352,8 @@ public struct BottleSettings: Codable, Equatable {
         self.metalConfig = try container.decodeIfPresent(BottleMetalConfig.self, forKey: .metalConfig) ?? BottleMetalConfig()
         self.dxvkConfig = try container.decodeIfPresent(BottleDXVKConfig.self, forKey: .dxvkConfig) ?? BottleDXVKConfig()
         self.dosboxConfig = try container.decodeIfPresent(BottleDOSBoxConfig.self, forKey: .dosboxConfig) ?? BottleDOSBoxConfig()
+        self.appMode = try container.decodeIfPresent(BottleAppMode.self, forKey: .appMode) ?? .singleApp
+        self.perBottleWineRuntime = try container.decodeIfPresent(GIACKWineInstaller.RuntimeSelection.self, forKey: .perBottleWineRuntime)
     }
     // swiftlint:enable line_length
 
@@ -444,6 +470,38 @@ public struct BottleSettings: Codable, Equatable {
         set {
             let trimmedValue = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
             dosboxConfig.startupProgram = trimmedValue?.isEmpty == true ? nil : trimmedValue
+        }
+    }
+
+    public var bottleAppMode: BottleAppMode {
+        get { appMode }
+        set { appMode = newValue }
+    }
+
+    /// Per-bottle Wine runtime override. When nil, the global selection is used.
+    public var perBottleWineRuntimeSelection: GIACKWineInstaller.RuntimeSelection? {
+        get { perBottleWineRuntime }
+        set { perBottleWineRuntime = newValue }
+    }
+
+    /// Effective Wine runtime for this bottle (per-bottle override or global).
+    public var effectiveWineRuntime: GIACKWineInstaller.RuntimeSelection {
+        perBottleWineRuntime ?? GIACKWineInstaller.selectedRuntimeSelection()
+    }
+
+    /// Whether this bottle is configured for single-app isolation.
+    public var isSingleAppMode: Bool { appMode == .singleApp }
+
+    /// Legacy compatibility: alias for older code referencing selectedWineChannel
+    @available(*, deprecated, renamed: "perBottleWineRuntimeSelection")
+    public var selectedWineChannel: String? {
+        get { perBottleWineRuntime?.rawValue }
+        set {
+            if let raw = newValue, let sel = GIACKWineInstaller.RuntimeSelection(rawValue: raw) {
+                perBottleWineRuntime = sel
+            } else {
+                perBottleWineRuntime = nil
+            }
         }
     }
 

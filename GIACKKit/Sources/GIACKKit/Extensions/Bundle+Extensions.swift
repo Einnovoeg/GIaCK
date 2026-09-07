@@ -21,16 +21,18 @@ import Foundation
 public extension Bundle {
     /// User-facing app name used across UI and path decoration.
     static var appDisplayName: String {
-        let fallbackName = "GIACK GPTK"
+        let fallbackName = "GIaCK"
         if let configuredName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
-           !configuredName.isEmpty {
+            !configuredName.isEmpty {
             return configuredName
         }
         return fallbackName
     }
 
-    static var whiskyBundleIdentifier: String {
+    /// Canonical bundle identifier for GIaCK. This is the source of truth for
+    /// application support paths, log folders, and database locations.
+    static var giackBundleIdentifier: String {
         if let environmentOverride = ProcessInfo.processInfo.environment["GIACK_BUNDLE_ID_OVERRIDE"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !environmentOverride.isEmpty {
@@ -65,8 +67,16 @@ public extension Bundle {
     }
 
     private static func discoverLegacyBundleIdentifiers() -> [String] {
-        let suffixes = [".GIACK", ".GIACKGPTK"]
-        var identifiers: Set<String> = ["io.whiskygptk.app"]
+        // Check case-insensitive suffixes and common historical identifiers.
+        // Previous builds used io.giack.app, org.giack.gptk, and upstream io.whiskygptk.app.
+        let suffixes = [".giack", ".giackgptk", ".gptk"]
+        var identifiers: Set<String> = [
+            "io.whiskygptk.app",
+            "io.giack.app",
+            "org.giack.gptk",
+            "com.giack.gptk",
+            "com.einnovoeg.GIACK"
+        ]
 
         for root in storageRoots() {
             guard let children = try? FileManager.default.contentsOfDirectory(
@@ -84,7 +94,9 @@ public extension Bundle {
                 }
 
                 let name = child.lastPathComponent
-                if suffixes.contains(where: name.hasSuffix) {
+                let lower = name.lowercased()
+                // Match any directory that looks like a GIaCK/Whisky container
+                if lower.contains("giack") || lower.contains("whisky") || suffixes.contains(where: lower.hasSuffix) {
                     identifiers.insert(name)
                 }
             }
@@ -100,5 +112,13 @@ public extension Bundle {
             .appending(path: "Library")
             .appending(path: "Containers")
         return [appSupport, containers]
+    }
+
+    // MARK: - Legacy alias
+
+    /// Historical name kept for compatibility. New code should use `giackBundleIdentifier`.
+    @available(*, deprecated, renamed: "giackBundleIdentifier")
+    static var whiskyBundleIdentifier: String {
+        giackBundleIdentifier
     }
 }

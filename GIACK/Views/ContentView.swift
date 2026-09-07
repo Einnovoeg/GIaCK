@@ -135,7 +135,7 @@ struct ContentView: View {
                             localized: "update.whiskygptk.runtime.description",
                             defaultValue: "You are running runtime %@, but %@ is available. Would you like to update?"
                         ),
-                        String(GIACKWineInstaller.whiskyWineVersion() ?? SemanticVersion(0, 0, 0)),
+                        String(GIACKWineInstaller.giackWineVersion() ?? SemanticVersion(0, 0, 0)),
                         String(updateInfo.1)
                     )
                     alert.alertStyle = .warning
@@ -154,7 +154,7 @@ struct ContentView: View {
                 }
             }
         }
-        .whiskyWindowBackground()
+        .giackWindowBackground()
     }
 
     private var sidebar: some View {
@@ -254,7 +254,7 @@ struct ContentView: View {
     }
 
     private var runtimeBadgeLabel: String {
-        GIACKWineInstaller.currentWineRuntime()?.displayName ?? "Runtime Missing"
+        GIACKWineInstaller.currentWineRuntime()?.displayName ?? "Missing"
     }
 
     private var runtimeReleaseLabel: String {
@@ -372,7 +372,7 @@ private struct SidebarHeaderView: View {
             .help("Installed libraries and runner status.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .whiskyPanelCard(cornerRadius: 18, padding: 14)
+        .giackPanelCard(cornerRadius: 18, padding: 14)
     }
 }
 

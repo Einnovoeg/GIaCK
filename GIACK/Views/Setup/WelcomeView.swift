@@ -78,7 +78,7 @@ struct WelcomeView: View {
             }
             .formStyle(.grouped)
             .scrollDisabled(true)
-            .whiskyGlassCard(cornerRadius: 26)
+            .giackGlassCard(cornerRadius: 26)
             .onAppear {
                 checkInstallStatus()
             }
@@ -104,7 +104,7 @@ struct WelcomeView: View {
                         }
 
                         if !runtimeInstalled {
-                            path.append(.whiskyWineDownload)
+                            path.append(.giackWineDownload)
                             return
                         }
 

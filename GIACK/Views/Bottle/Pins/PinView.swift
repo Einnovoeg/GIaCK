@@ -69,7 +69,7 @@ struct PinView: View {
 
             Divider()
 
-            ProgramMenuView(program: program)
+            ProgramMenuView(program: program, path: $path)
 
             Button("button.rename", systemImage: "pencil.line") {
                 showRenameSheet.toggle()

@@ -140,7 +140,18 @@ struct BottleListEntry: View {
 
     private var subtitle: String {
         if bottle.runner == .wine {
-            var parts = [bottle.settings.windowsVersion.pretty(), bottle.settings.dxvk ? "DXVK" : "D3DMetal"]
+            let runtimeLabel: String = {
+                switch bottle.settings.effectiveWineRuntime {
+                case .gptkManaged: return "GPTK"
+                case .wineStable: return "Stable"
+                case .wineDevel: return "Devel"
+                case .wineStaging: return "Staging"
+                }
+            }()
+            var parts = [runtimeLabel, bottle.settings.windowsVersion.pretty(), bottle.settings.dxvk ? "DXVK" : "D3DMetal"]
+            if bottle.settings.perBottleWineRuntimeSelection != nil {
+                parts.append("Per-Bottle")
+            }
             if bottle.settings.avxEnabled {
                 parts.append("AVX")
             }

@@ -41,7 +41,7 @@ struct PinAddView: View {
                 .lineLimit(2, reservesSpace: true)
         }
         .frame(width: 90, height: 90)
-        .whiskyPanelCard(cornerRadius: 16, padding: 10)
+        .giackPanelCard(cornerRadius: 16, padding: 10)
         .sheet(isPresented: $showingSheet) {
             PinCreationView(bottle: bottle)
         }

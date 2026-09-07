@@ -184,6 +184,6 @@ struct GIACKWineDownloadView: View {
     }
 
     func proceed() {
-        path.append(.whiskyWineInstall)
+        path.append(.giackWineInstall)
     }
 }

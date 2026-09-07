@@ -46,9 +46,9 @@ extension Bottle {
 
         switch runner {
         case .wine:
-            guard let whiskyCmdURL = Bundle.main.url(forResource: "GIACKCmd", withExtension: nil) else { return }
-            let whiskyCmd = whiskyCmdURL.path(percentEncoded: false)
-            command = "eval \\\"$(\(whiskyCmd.esc) shellenv \(settings.name.esc))\\\""
+            guard let giackCmdURL = Bundle.main.url(forResource: "GIACKCmd", withExtension: nil) else { return }
+            let giackCmd = giackCmdURL.path(percentEncoded: false)
+            command = "eval \\\"$(\(giackCmd.esc) shellenv \(settings.name.esc))\\\""
         case .dosbox:
             let dosboxCommand = DOSBox.generateRunCommand(bottle: self)
             command = "cd \(dosGamesFolder.path.esc); echo \"DOSBox shell ready for \(settings.name.esc).\"; echo \"Run: \(dosboxCommand.replacingOccurrences(of: "\"", with: "\\\""))\""

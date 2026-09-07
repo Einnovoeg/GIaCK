@@ -18,8 +18,14 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 import GIACKKit
 
+/// Tracks async UI states for registry-backed settings.
+///
+/// Wine registry reads are asynchronous and can fail if the bottle has never
+/// written the key before. This enum lets the UI show a spinner, the live
+/// control, or a fallback message without blocking the form.
 enum LoadingState {
     case loading
     case modifying
@@ -40,10 +46,12 @@ struct ConfigView: View {
     @State private var dpiConfigLoadingState: LoadingState = .loading
     @State private var dpiSheetPresented: Bool = false
     @AppStorage("wineSectionExpanded") private var wineSectionExpanded: Bool = true
+    @AppStorage("wineRuntimeSectionExpanded") private var wineRuntimeSectionExpanded: Bool = true
     @AppStorage("dxvkSectionExpanded") private var dxvkSectionExpanded: Bool = true
     @AppStorage("metalSectionExpanded") private var metalSectionExpanded: Bool = true
     @AppStorage("dosboxSectionExpanded") private var dosboxSectionExpanded: Bool = true
     @AppStorage("dosboxStartupExpanded") private var dosboxStartupExpanded: Bool = true
+    @AppStorage("selectedWineRuntimeSelection") private var globalWineRuntimeRaw: String = GIACKWineInstaller.RuntimeSelection.gptkManaged.rawValue
 
     var body: some View {
         Form {
@@ -55,11 +63,12 @@ struct ConfigView: View {
             }
         }
         .formStyle(.grouped)
-        .animation(.whiskyDefault, value: wineSectionExpanded)
-        .animation(.whiskyDefault, value: dxvkSectionExpanded)
-        .animation(.whiskyDefault, value: metalSectionExpanded)
-        .animation(.whiskyDefault, value: dosboxSectionExpanded)
-        .animation(.whiskyDefault, value: dosboxStartupExpanded)
+        .animation(.giackDefault, value: wineSectionExpanded)
+        .animation(.giackDefault, value: wineRuntimeSectionExpanded)
+        .animation(.giackDefault, value: dxvkSectionExpanded)
+        .animation(.giackDefault, value: metalSectionExpanded)
+        .animation(.giackDefault, value: dosboxSectionExpanded)
+        .animation(.giackDefault, value: dosboxStartupExpanded)
         .bottomBar {
             HStack {
                 Spacer()
@@ -202,6 +211,8 @@ struct ConfigView: View {
 
     @ViewBuilder
     private var wineSections: some View {
+        wineRuntimeSection
+
         Section("config.title.wine", isExpanded: $wineSectionExpanded) {
             SettingItemView(title: "config.winVersion", loadingState: winVersionLoadingState) {
                 Picker("config.winVersion", selection: $bottle.settings.windowsVersion) {
@@ -336,6 +347,93 @@ struct ConfigView: View {
                 .help("Enable experimental DXR support on compatible Apple GPUs.")
             }
         }
+    }
+
+    /// Per-bottle Wine runtime override.
+    ///
+    /// Global selection lives in `UserDefaults:selectedWineRuntimeSelection` and is
+    /// managed in Settings → Runners. This picker writes `BottleSettings.perBottleWineRuntimeSelection`
+    /// (nil = follow global, non-nil = pinned channel). The effective value is
+    /// `bottle.settings.effectiveWineRuntime` and is resolved bottle-aware in
+    /// `Wine.wineBinary(for:)` so the UI never needs to shell out to discover state.
+    private var wineRuntimeSection: some View {
+        Section("Wine Runtime", isExpanded: $wineRuntimeSectionExpanded) {
+            Picker("Runtime", selection: $bottle.settings.perBottleWineRuntimeSelection) {
+                Text(globalRuntimeOptionLabel).tag(nil as GIACKWineInstaller.RuntimeSelection?)
+                ForEach(GIACKWineInstaller.RuntimeSelection.allCases, id: \.self) { selection in
+                    Text(runtimePickerLabel(for: selection)).tag(selection as GIACKWineInstaller.RuntimeSelection?)
+                }
+            }
+            .help("Override the global Wine runtime for this bottle only. Choose Use Global to follow Settings → Runners.")
+
+            Text("This override affects only this bottle. Other libraries keep using the global runtime from Settings → Runners.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LabeledContent("Effective Runtime") {
+                Text(effectiveRuntimeDisplayName)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(GIACKWineInstaller.runtimeSummary(for: effectiveRuntimeSelection))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            if !isEffectiveRuntimeInstalled {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Selected runtime is not installed")
+                            .font(.caption.weight(.semibold))
+                        Text("Install it in Settings → Runners, or switch this bottle back to Use Global.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            HStack {
+                Button("Open Runners Settings") {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                .help("Open Settings → Runners to install or change the global Wine runtime.")
+
+                if bottle.settings.perBottleWineRuntimeSelection != nil {
+                    Button("Use Global Runtime") {
+                        bottle.settings.perBottleWineRuntimeSelection = nil
+                    }
+                    .help("Clear the per-bottle override and follow the global runtime again.")
+                }
+            }
+        }
+    }
+
+    private var globalRuntimeSelection: GIACKWineInstaller.RuntimeSelection {
+        GIACKWineInstaller.RuntimeSelection(rawValue: globalWineRuntimeRaw) ?? .gptkManaged
+    }
+
+    private var effectiveRuntimeSelection: GIACKWineInstaller.RuntimeSelection {
+        bottle.settings.effectiveWineRuntime
+    }
+
+    private var effectiveRuntimeDisplayName: String {
+        GIACKWineInstaller.runtime(for: effectiveRuntimeSelection)?.displayName ?? effectiveRuntimeSelection.displayName
+    }
+
+    private var isEffectiveRuntimeInstalled: Bool {
+        GIACKWineInstaller.isRuntimeInstalled(for: effectiveRuntimeSelection)
+    }
+
+    private var globalRuntimeOptionLabel: String {
+        "Use Global (\(globalRuntimeSelection.displayName))"
+    }
+
+    private func runtimePickerLabel(for selection: GIACKWineInstaller.RuntimeSelection) -> String {
+        let installed = GIACKWineInstaller.isRuntimeInstalled(for: selection)
+        return installed ? selection.displayName : "\(selection.displayName) — Not installed"
     }
 
     @ViewBuilder

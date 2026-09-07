@@ -25,7 +25,7 @@ public struct PEError: Error {
     static let invalidPEFile = PEError(message: "Invalid PE file")
 }
 
-public enum Architecture: Hashable {
+public enum Architecture: Hashable, Sendable {
     case x32
     case x64
     case unknown

@@ -99,7 +99,7 @@ struct SettingsView: View {
         return "\(marketingVersion) (\(buildNumber))"
     }
     private var managedRuntimeSummary: String {
-        let version = GIACKWineInstaller.whiskyWineVersion().map(String.init) ?? String(
+        let version = GIACKWineInstaller.giackWineVersion().map(String.init) ?? String(
             localized: "settings.runtime.notInstalled",
             defaultValue: "Not installed"
         )
@@ -401,6 +401,15 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                Text(
+                    String(
+                        localized: "settings.runners.perBottle.note",
+                        defaultValue: "Per-bottle overrides can be set in each library's Config tab. Bottles with no override follow this global runtime."
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Section("DOSBox") {

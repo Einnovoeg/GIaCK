@@ -76,7 +76,7 @@ extension FileHandle {
         header += "Bottle Name: \(bottle.settings.name)\n"
         header += "Bottle URL: \(bottle.url.path)\n\n"
 
-        if let version = GIACKWineInstaller.whiskyWineVersion() {
+        if let version = GIACKWineInstaller.giackWineVersion() {
             header += "Runtime Version: \(version.major).\(version.minor).\(version.patch)\n"
         }
         if let source = GIACKWineInstaller.runtimeSource() {

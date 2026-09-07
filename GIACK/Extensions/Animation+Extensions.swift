@@ -19,7 +19,12 @@
 import SwiftUI
 
 extension Animation {
-    static var whiskyDefault: Animation {
+    static var giackDefault: Animation {
         .easeInOut(duration: 0.2)
+    }
+
+    @available(*, deprecated, renamed: "giackDefault")
+    static var whiskyDefault: Animation {
+        giackDefault
     }
 }

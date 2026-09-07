@@ -30,7 +30,7 @@ public class GIACKWineInstaller {
     /// Application Support root scoped by the active bundle identifier.
     public static let applicationFolder = FileManager.default.urls(
         for: .applicationSupportDirectory, in: .userDomainMask
-    )[0].appending(path: Bundle.whiskyBundleIdentifier)
+    )[0].appending(path: Bundle.giackBundleIdentifier)
 
     /// Root folder that stores the installed runtime payload and helper files.
     public static let libraryFolder = applicationFolder.appending(path: "Libraries")
@@ -94,7 +94,7 @@ public class GIACKWineInstaller {
     /// The managed GPTK runtime remains the default because it is the path that
     /// carries app-managed extras such as DXVK and Winetricks. Homebrew-backed
     /// Wine selections are offered for users who want upstream Wine 11 builds.
-    public enum RuntimeSelection: String, CaseIterable, Sendable {
+    public enum RuntimeSelection: String, CaseIterable, Sendable, Codable {
         case gptkManaged
         case wineStable
         case wineDevel
@@ -183,12 +183,53 @@ public class GIACKWineInstaller {
         currentWineRuntime()?.wineBinaryURL
     }
 
+    public static func wineBinaryURL(for selection: RuntimeSelection) -> URL? {
+        runtimeForSelection(selection)?.wineBinaryURL
+    }
+
     public static func wineserverBinaryURL() -> URL? {
         currentWineRuntime()?.wineserverBinaryURL
     }
 
+    public static func wineserverBinaryURL(for selection: RuntimeSelection) -> URL? {
+        runtimeForSelection(selection)?.wineserverBinaryURL
+    }
+
     public static func wineBinDirectoryURL() -> URL? {
         currentWineRuntime()?.binDirectoryURL
+    }
+
+    public static func wineBinDirectoryURL(for selection: RuntimeSelection) -> URL? {
+        runtimeForSelection(selection)?.binDirectoryURL
+    }
+
+    /// Resolve an installed runtime for the given selection, or nil if not installed.
+    ///
+    /// This is the per-bottle-safe variant of `currentWineRuntime()`. The Config tab
+    /// and the per-bottle status cards use this to surface install state without
+    /// mutating global `UserDefaults` selection.
+    public static func runtime(for selection: RuntimeSelection) -> ActiveWineRuntime? {
+        runtimeForSelection(selection)
+    }
+
+    /// Whether the requested runtime is currently installed and executable on this Mac.
+    ///
+    /// For `.gptkManaged`, this checks the managed `Wine/bin/wine64` path. For Homebrew
+    /// selections, it checks the corresponding `*.app` bundle under `/Applications`.
+    public static func isRuntimeInstalled(for selection: RuntimeSelection) -> Bool {
+        runtimeForSelection(selection) != nil
+    }
+
+    /// Human-readable summary for settings and library detail views.
+    ///
+    /// Returns `DisplayName · Version · Source` when installed, otherwise
+    /// `DisplayName · Not installed` so the UI can guide the user to
+    /// Settings → Runners without leaving the detail blank.
+    public static func runtimeSummary(for selection: RuntimeSelection) -> String {
+        if let runtime = runtimeForSelection(selection) {
+            return "\(runtime.displayName) · \(runtime.versionSummary) · \(runtime.sourceSummary)"
+        }
+        return "\(selection.displayName) · Not installed"
     }
 
     public static func wineToolBinaryURL(named name: String) -> URL? {
@@ -200,6 +241,20 @@ public class GIACKWineInstaller {
         }
 
         guard let externalRuntime = currentWineRuntime()?.selection.externalRuntime else {
+            return nil
+        }
+        return externalRuntime.toolBinaryURL(named: name)
+    }
+
+    public static func wineToolBinaryURL(named name: String, for selection: RuntimeSelection) -> URL? {
+        let runtime = runtimeForSelection(selection)
+        if runtime?.supportsManagedExtras == true {
+            let candidate = binFolder.appending(path: name)
+            if FileManager.default.isExecutableFile(atPath: candidate.path(percentEncoded: false)) {
+                return candidate
+            }
+        }
+        guard let externalRuntime = runtime?.selection.externalRuntime else {
             return nil
         }
         return externalRuntime.toolBinaryURL(named: name)
@@ -325,7 +380,7 @@ public class GIACKWineInstaller {
             return (false, SemanticVersion(0, 0, 0))
         }
 
-        let localVersion = whiskyWineVersion()
+        let localVersion = giackWineVersion()
         let remoteVersion = await latestRuntimePackage()?.version
 
         if let localVersion = localVersion, let remoteVersion = remoteVersion, localVersion < remoteVersion {
@@ -335,8 +390,14 @@ public class GIACKWineInstaller {
         return (false, SemanticVersion(0, 0, 0))
     }
 
-    public static func whiskyWineVersion() -> SemanticVersion? {
+    /// Current managed runtime version. Prefer `giackWineVersion()`; `whiskyWineVersion()` remains for compatibility.
+    public static func giackWineVersion() -> SemanticVersion? {
         runtimeVersionInfo()?.version
+    }
+
+    @available(*, deprecated, renamed: "giackWineVersion")
+    public static func whiskyWineVersion() -> SemanticVersion? {
+        giackWineVersion()
     }
 
     public static func runtimeReleaseName() -> String? {
