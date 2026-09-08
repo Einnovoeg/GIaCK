@@ -76,46 +76,61 @@ extension Bottle {
         }
     }
 
+    /// Resolves Start Menu `.lnk` shortcuts to their target executables.
+    ///
+    /// Both the global `ProgramData` and every per-user `AppData/Roaming` Start Menu
+    /// are scanned. The previous implementation only checked the hardcoded
+    /// `users/crossover` profile, which missed bottles that were renamed or that
+    /// contain multiple user profiles. Each `.lnk` is parsed via `ShellLinkHeader`,
+    /// its target is unix-ified (`C:` → `…/drive_c`), and the resulting `Program`
+    /// is returned. The `.lnk` file is removed after successful parsing to avoid
+    /// repeated pinning on subsequent scans (mirrors original Whisky behaviour).
     @discardableResult
     func getStartMenuPrograms() -> [Program] {
         guard runner == .wine else {
             return []
         }
 
-        let globalStartMenu = url
-            .appending(path: "drive_c")
-            .appending(path: "ProgramData")
-            .appending(path: "Microsoft")
-            .appending(path: "Windows")
-            .appending(path: "Start Menu")
+        var startMenuRoots: [URL] = []
 
-        let userStartMenu = url
-            .appending(path: "drive_c")
-            .appending(path: "users")
-            .appending(path: "crossover")
-            .appending(path: "AppData")
-            .appending(path: "Roaming")
-            .appending(path: "Microsoft")
-            .appending(path: "Windows")
-            .appending(path: "Start Menu")
+        // Global Start Menu (all users)
+        startMenuRoots.append(
+            url.appending(path: "drive_c/ProgramData/Microsoft/Windows/Start Menu")
+        )
+
+        // Per-user Start Menus — enumerate every profile under drive_c/users
+        let usersRoot = url.appending(path: "drive_c/users")
+        if let userDirs = try? FileManager.default.contentsOfDirectory(
+            at: usersRoot, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
+        ) {
+            for userDir in userDirs {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: userDir.path(percentEncoded: false), isDirectory: &isDir), isDir.boolValue else { continue }
+                let candidate = userDir
+                    .appending(path: "AppData/Roaming/Microsoft/Windows/Start Menu")
+                if FileManager.default.fileExists(atPath: candidate.path(percentEncoded: false)) {
+                    startMenuRoots.append(candidate)
+                }
+            }
+        } else {
+            // Fallback to legacy hardcoded path if users enumeration fails
+            startMenuRoots.append(
+                url.appending(path: "drive_c/users/crossover/AppData/Roaming/Microsoft/Windows/Start Menu")
+            )
+        }
 
         var startMenuPrograms: [Program] = []
         var linkURLs: [URL] = []
-        let globalEnumerator = FileManager.default.enumerator(at: globalStartMenu,
-                                                              includingPropertiesForKeys: [.isRegularFileKey],
-                                                              options: [.skipsHiddenFiles])
-        while let url = globalEnumerator?.nextObject() as? URL {
-            if url.pathExtension == "lnk" {
-                linkURLs.append(url)
-            }
-        }
-
-        let userEnumerator = FileManager.default.enumerator(at: userStartMenu,
-                                                            includingPropertiesForKeys: [.isRegularFileKey],
-                                                            options: [.skipsHiddenFiles])
-        while let url = userEnumerator?.nextObject() as? URL {
-            if url.pathExtension == "lnk" {
-                linkURLs.append(url)
+        for root in startMenuRoots {
+            guard FileManager.default.fileExists(atPath: root.path(percentEncoded: false)) else { continue }
+            if let enumerator = FileManager.default.enumerator(
+                at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]
+            ) {
+                while let linkURL = enumerator.nextObject() as? URL {
+                    if linkURL.pathExtension.lowercased() == "lnk" {
+                        linkURLs.append(linkURL)
+                    }
+                }
             }
         }
 
@@ -139,27 +154,135 @@ extension Bottle {
         return startMenuPrograms
     }
 
+    /// Comprehensive discovery of installed executables inside the bottle.
+    ///
+    /// Wine bottles are deliberately scanned broadly: the previous implementation
+    /// only checked `Program Files` and `Program Files (x86)`, which missed
+    /// portable installs in `drive_c/Games`, `drive_c/GOG Games`, user profiles,
+    /// `ProgramData`, and custom folders. DOSBox libraries scan the entire
+    /// `DOS Games` folder for `exe/com/bat`. Blocklisted URLs are always excluded,
+    /// and pins are re-added even if the underlying file lives outside the normal
+    /// roots so manually added shortcuts survive.
     func updateInstalledPrograms() {
         var programs: [Program] = []
-        var foundURLS: Set<URL> = []
+        // Use lowercased absolute path for deduplication because the macOS
+        // file system is case-insensitive but `URL` hashing is case-sensitive.
+        var foundLowerPaths: Set<String> = []
+        let blockLower = Set(settings.blocklist.map { $0.path(percentEncoded: false).lowercased() })
+
+        func addIfValid(_ fileURL: URL) {
+            guard !fileURL.hasDirectoryPath else { return }
+            let ext = fileURL.pathExtension.lowercased()
+            guard ext == "exe" else { return }
+            let lower = fileURL.path(percentEncoded: false).lowercased()
+            // Skip anything still under Windows system hierarchy (already excluded via
+            // directory skip, but double-check for case variants).
+            if lower.contains("/drive_c/windows/") || lower.contains("\\windows\\") { return }
+            if blockLower.contains(lower) { return }
+            guard !foundLowerPaths.contains(lower) else { return }
+            foundLowerPaths.insert(lower)
+            programs.append(Program(url: fileURL, bottle: self))
+        }
 
         switch runner {
         case .wine:
             let driveC = url.appending(path: "drive_c")
+            let fileManager = FileManager.default
 
-            for folderName in ["Program Files", "Program Files (x86)"] {
-                let folderURL = driveC.appending(path: folderName)
-                let enumerator = FileManager.default.enumerator(
-                    at: folderURL, includingPropertiesForKeys: [.isExecutableKey], options: [.skipsHiddenFiles]
-                )
+            // 1) Deep scan of the entire drive_c with system directories pruned.
+            // This catches portable installs, GOG, custom folders, user Desktop/Downloads,
+            // and any exe outside the two classic Program Files roots.
+            if fileManager.fileExists(atPath: driveC.path(percentEncoded: false)) {
+                let excludedDirNames: Set<String> = [
+                    "windows", "windowssysdir", "perfLogs", "$recycle.bin",
+                    "system volume information", "msocache", "recovery", "config.msi",
+                    "appdata\\local\\temp", "appdata\\local\\microsoft\\windows\\inetcache"
+                ]
+                // Lowercased substrings that should never contribute executables.
+                let excludedPathSubstrings: [String] = [
+                    "/windows/", "\\windows\\",
+                    "/windows.old/", "\\windows.old\\"
+                ]
 
-                while let url = enumerator?.nextObject() as? URL {
-                    guard !url.hasDirectoryPath && url.pathExtension == "exe" else { continue }
-                    guard !settings.blocklist.contains(url) else { continue }
-                    foundURLS.insert(url)
-                    programs.append(Program(url: url, bottle: self))
+                if let enumerator = fileManager.enumerator(
+                    at: driveC,
+                    includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                ) {
+                    for case let fileURL as URL in enumerator {
+                        // Check if this URL is a directory that should be pruned.
+                        var isDir: ObjCBool = false
+                        if fileManager.fileExists(atPath: fileURL.path(percentEncoded: false), isDirectory: &isDir), isDir.boolValue {
+                            let last = fileURL.lastPathComponent.lowercased()
+                            if excludedDirNames.contains(last) {
+                                enumerator.skipDescendants()
+                                continue
+                            }
+                            let lowerPath = fileURL.path(percentEncoded: false).lowercased()
+                            if excludedPathSubstrings.contains(where: { lowerPath.contains($0) }) {
+                                enumerator.skipDescendants()
+                                continue
+                            }
+                            continue // don't try to add directories as programs
+                        }
+
+                        // Regular file - filter and add
+                        addIfValid(fileURL)
+                    }
                 }
             }
+
+            // 2) Fallback: explicitly ensure Program Files roots are covered even
+            // if the broad enumerator above was interrupted early. Deduplication via
+            // foundLowerPaths keeps this cheap.
+            for folderName in ["Program Files", "Program Files (x86)", "ProgramData", "Games", "GOG Games"] {
+                let folderURL = driveC.appending(path: folderName)
+                guard fileManager.fileExists(atPath: folderURL.path(percentEncoded: false)) else { continue }
+                if let enumerator = fileManager.enumerator(
+                    at: folderURL,
+                    includingPropertiesForKeys: [.isRegularFileKey],
+                    options: [.skipsHiddenFiles]
+                ) {
+                    for case let fileURL as URL in enumerator {
+                        addIfValid(fileURL)
+                    }
+                }
+            }
+
+            // 3) User profiles - scan each user folder under drive_c/users if present.
+            // This catches Start Menu targets that live in AppData/Local, Desktop, etc.
+            let usersRoot = driveC.appending(path: "users")
+            if fileManager.fileExists(atPath: usersRoot.path(percentEncoded: false)) {
+                if let userDirs = try? fileManager.contentsOfDirectory(at: usersRoot, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+                    for userDir in userDirs {
+                        var isDir: ObjCBool = false
+                        guard fileManager.fileExists(atPath: userDir.path(percentEncoded: false), isDirectory: &isDir), isDir.boolValue else { continue }
+                        // Skip default system profiles that contain no real installs
+                        let lowerName = userDir.lastPathComponent.lowercased()
+                        if ["public", "default", "all users", "default user"].contains(lowerName) { continue }
+                        if let enumerator = fileManager.enumerator(
+                            at: userDir,
+                            includingPropertiesForKeys: [.isRegularFileKey],
+                            options: [.skipsHiddenFiles]
+                        ) {
+                            for case let fileURL as URL in enumerator {
+                                // Prune Windows junctions inside user profile if any
+                                var isDirectory: ObjCBool = false
+                                if fileManager.fileExists(atPath: fileURL.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue {
+                                    let lowerPath = fileURL.path(percentEncoded: false).lowercased()
+                                    if lowerPath.contains("/appdata/local/temp") || lowerPath.contains("\\appdata\\local\\temp") {
+                                        enumerator.skipDescendants()
+                                        continue
+                                    }
+                                    continue
+                                }
+                                addIfValid(fileURL)
+                            }
+                        }
+                    }
+                }
+            }
+
         case .dosbox:
             let enumerator = FileManager.default.enumerator(
                 at: dosGamesFolder,
@@ -171,17 +294,26 @@ extension Bottle {
                 guard !url.hasDirectoryPath else { continue }
                 let ext = url.pathExtension.lowercased()
                 guard ["exe", "com", "bat"].contains(ext) else { continue }
-                guard !settings.blocklist.contains(url) else { continue }
-                foundURLS.insert(url)
+                let lower = url.path(percentEncoded: false).lowercased()
+                if blockLower.contains(lower) { continue }
+                if foundLowerPaths.contains(lower) { continue }
+                foundLowerPaths.insert(lower)
                 programs.append(Program(url: url, bottle: self))
             }
         }
 
-        // Add missing programs from pins
+        // Add missing programs from pins (so manually pinned custom paths survive even if block logic changes)
         for pin in settings.pins {
-            guard let url = pin.url else { continue }
-            guard !foundURLS.contains(url) else { continue }
-            programs.append(Program(url: url, bottle: self))
+            guard let pinURL = pin.url else { continue }
+            let lower = pinURL.path(percentEncoded: false).lowercased()
+            guard !foundLowerPaths.contains(lower) else { continue }
+            // Respect blocklist even for pins - user explicitly blocked this path
+            if blockLower.contains(lower) { continue }
+            // Only add if file still exists or is on removable media (mirrors Bottle.init pin filtering)
+            if FileManager.default.fileExists(atPath: pinURL.path(percentEncoded: false)) {
+                programs.append(Program(url: pinURL, bottle: self))
+                foundLowerPaths.insert(lower)
+            }
         }
 
         self.programs = programs.sorted { $0.name.lowercased() < $1.name.lowercased() }

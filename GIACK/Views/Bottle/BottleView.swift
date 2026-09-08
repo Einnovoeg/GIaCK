@@ -158,6 +158,17 @@ struct BottleView: View {
         }
     }
 
+    /// Refresh the in-memory program list and reconcile Start Menu shortcuts.
+    ///
+    /// 1. `updateInstalledPrograms()` does a deep `drive_c` scan (not just
+    ///    Program Files) so portable and custom-location installs are found.
+    /// 2. `getStartMenuPrograms()` resolves `.lnk` files from both the global
+    ///    and per-user Start Menus. Previously only targets already in
+    ///    `bottle.programs` were pinned — so Start Menu entries pointing outside
+    ///    Program Files were silently dropped. Now missing targets are **added**
+    ///    to `bottle.programs` (if not blocklisted and file exists) and then
+    ///    pinned, so pre-installed apps always appear in Overview → Quick Launch
+    ///    and Programs.
     private func updateStartMenu() {
         bottle.updateInstalledPrograms()
 
@@ -167,16 +178,43 @@ struct BottleView: View {
 
         let startMenuPrograms = bottle.getStartMenuPrograms()
         for startMenuProgram in startMenuPrograms {
-            for program in bottle.programs where
-            // Keep the comparison case-insensitive because Wine may vary casing for
-            // the same path between discovery passes.
-            program.url.path().caseInsensitiveCompare(startMenuProgram.url.path()) == .orderedSame {
-                program.pinned = true
-                guard !bottle.settings.pins.contains(where: { $0.url == program.url }) else { continue }
-                bottle.settings.pins.append(PinnedProgram(
-                    name: program.url.deletingPathExtension().lastPathComponent,
-                    url: program.url
-                ))
+            let lowerTarget = startMenuProgram.url.path(percentEncoded: false).lowercased()
+            let isBlocklisted = bottle.settings.blocklist.contains(where: { $0.path(percentEncoded: false).lowercased() == lowerTarget })
+            if isBlocklisted { continue }
+
+            // If the Start Menu target was not found during the drive_c scan
+            // (e.g. it lives on a non-standard location or was missed due to
+            // pruning), add it directly so the user sees it.
+            let existing = bottle.programs.first(where: {
+                $0.url.path(percentEncoded: false).lowercased() == lowerTarget
+            })
+
+            if let existing {
+                // Already discovered — just ensure it's pinned
+                if !existing.pinned {
+                    existing.pinned = true
+                }
+                // Defensive: also ensure pin exists even if didSet didn't fire (legacy bottles)
+                if !bottle.settings.pins.contains(where: { $0.url?.path(percentEncoded: false).lowercased() == lowerTarget }) {
+                    bottle.settings.pins.append(PinnedProgram(
+                        name: existing.url.deletingPathExtension().lastPathComponent,
+                        url: existing.url
+                    ))
+                }
+            } else {
+                // Missing from discovery — verify the target exe actually exists before adding
+                guard FileManager.default.fileExists(atPath: startMenuProgram.url.path(percentEncoded: false)) else { continue }
+                // Add to programs list and pin
+                bottle.programs.append(startMenuProgram)
+                // Sort to keep UI stable (mirrors updateInstalledPrograms sorting)
+                bottle.programs.sort { $0.name.lowercased() < $1.name.lowercased() }
+                startMenuProgram.pinned = true
+                if !bottle.settings.pins.contains(where: { $0.url?.path(percentEncoded: false).lowercased() == lowerTarget }) {
+                    bottle.settings.pins.append(PinnedProgram(
+                        name: startMenuProgram.url.deletingPathExtension().lastPathComponent,
+                        url: startMenuProgram.url
+                    ))
+                }
             }
         }
     }

@@ -103,6 +103,21 @@ struct ContentView: View {
             bottleVM.loadBottles()
             bottlesLoaded = true
 
+            // 2.0 deep-scan migration: re-evaluate installed programs with the
+            // expanded drive_c logic so bottles that previously hid pre-installed
+            // apps (only Program Files) now surface them without manual action.
+            Task.detached(priority: .utility) {
+                for bottle in BottleVM.shared.bottles {
+                    await MainActor.run {
+                        bottle.updateInstalledPrograms()
+                    }
+                    if bottle.runner == .wine {
+                        // Warm Start Menu cache (resolves .lnk and seeds pins)
+                        _ = await MainActor.run { bottle.getStartMenuPrograms() }
+                    }
+                }
+            }
+
             if !bottleVM.bottles.isEmpty {
                 if let bottle = bottleVM.bottles.first(where: { $0.url == selectedBottleURL && $0.isAvailable }) {
                     selected = bottle.url
@@ -152,6 +167,17 @@ struct ContentView: View {
                         showSetup = true
                     }
                 }
+            }
+
+            // Warm the AI compatibility databases in the background. Both actors are
+            // cache-first and never block UI; this ensures per-game dependency scans
+            // (AIBottleAdvisor / DependencyResolver) have remote entries available
+            // without requiring an explicit Settings → Sync action.
+            Task.detached(priority: .utility) {
+                await AICompatibilityService.shared.sync()
+            }
+            Task.detached(priority: .utility) {
+                try? await RemoteDatabase.shared.syncFromRemote()
             }
         }
         .giackWindowBackground()

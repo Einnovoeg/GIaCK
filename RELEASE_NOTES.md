@@ -1,5 +1,14 @@
 # GIaCK 2.0 — plus 1.1 & 1.0 notes
 
+## 2.0.1 — September 8, 2026 — deep scan & per-game AI (follow-up to 2.0)
+
+**Focus:** fix “pre-installed apps invisible” and wire the AI per-game dependency scan the user flagged.
+
+- **Deep program discovery** — `Bottle.updateInstalledPrograms()` was limited to `Program Files` + `Program Files (x86)`. Now it deep-scans the entire `drive_c` (pruning `windows` system dirs), plus `ProgramData`, `Games`/`GOG Games`, and every `users/*` profile (AppData, Desktop, etc.), de-duplicates case-insensitively, and respects blocklist. Windows system exes are skipped. `BottleView.updateStartMenu()` now **adds** missing Start Menu `.lnk` targets to `bottle.programs` instead of only pinning already-found ones, and `getStartMenuPrograms()` scans all user profiles’ Start Menus (not just `crossover`). `ContentView` now proactively re-scans all bottles on launch so existing installs appear without manual action; `ProgramsView` has an explicit **Rescan Now** header.
+- **Per-game AI wired** — `ProgramView` now has an **AI Analysis** section (auto-runs on appear): `AIGameDetector` → `AIDependencyAnalyzer` → `AIBottleAdvisor` shows identity (publisher/engine/confidence/arch), recommended preset/Win version/sync/DXVK, DLLs/verbs, rationale, install plan, **Apply Recommended Settings** (mutates `BottleSettings`), and **Install Missing Dependencies** (queues `Winetricks.runCommand` per verb). `ProgramsView` batch header adds **AI Scan All** and collapsible results. The previous kit was orphaned (no UI call site).
+- **AI remote fix** — `AICompatibilityService.remoteURL` / `AICompatibilityConfig.remoteURL` corrected from `GIACK-App/GIACK` (404) to `Einnovoeg/GIaCK`; `ContentView.task` now warms `AICompatibilityService.sync()` + `RemoteDatabase.syncFromRemote()` in background so per-game scans have remote entries. Healing the 404 and the never-called `sync()` makes the “AI/database for installing new files” path intact.
+- **Verify:** `swift build --package-path GIACKKit` passes; manual temp-bottle test (8 exes across `Program Files`, `GOG Games`, `users/*/Desktop`, `ProgramData` plus 2 `windows` ignored) → 8 found. Immediate workaround for affected users: open bottle → Programs → **Rescan Now** (or relaunch).
+
 ## 2.0 — September 7, 2026
 
 **Focus:** per-bottle Wine runtime UI, runtime status visibility, docs/security polish.

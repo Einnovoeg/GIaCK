@@ -108,9 +108,13 @@ public actor AICompatibilityService {
 
     /// Sync remote databases. Tries curated GIACK remote if available, otherwise
     /// uses built-in curated list. Never throws fatally; logs errors.
+    ///
+    /// Remote location is unified to `Einnovoeg/GIaCK` (see `ProjectInfo.applicationDatabaseURL`
+    /// in the app target and `Constants.swift`). The previous hard-coded
+    /// `GIACK-App/GIACK` 404'd and caused this sync to silently merge nothing.
     public func sync() async {
-        // Try GIACK curated remote first - hardcoded to avoid GIACK app dependency
-        let remoteURLString = "https://raw.githubusercontent.com/GIACK-App/GIACK/main/GIACK/Resources/ApplicationDatabase.json"
+        // Try GIACK curated remote first - unified to Einnovoeg/GIaCK main
+        let remoteURLString = "https://raw.githubusercontent.com/Einnovoeg/GIaCK/main/GIACK/Resources/ApplicationDatabase.json"
         if let url = URL(string: remoteURLString) {
             do {
                 let (data, response) = try await session.data(from: url)
@@ -386,9 +390,10 @@ public actor AICompatibilityService {
 
 // MARK: - AI Compatibility Helpers
 
-/// Centralized URL for AI compatibility database future endpoint.
+/// Centralized URL for AI compatibility database.
+/// Unified to the maintained fork; previously `GIACK-App/GIACK` returned 404.
 enum AICompatibilityConfig {
     static var remoteURL: URL? {
-        URL(string: "https://raw.githubusercontent.com/GIACK-App/GIACK/main/GIACK/Resources/ApplicationDatabase.json")
+        URL(string: "https://raw.githubusercontent.com/Einnovoeg/GIaCK/main/GIACK/Resources/ApplicationDatabase.json")
     }
 }

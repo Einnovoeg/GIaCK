@@ -2,6 +2,22 @@
 
 All notable public changes are documented here. GIaCK follows Semantic Versioning for public releases.
 
+## [2.0.1] - 2026-09-08 — deep scan & per-game AI
+
+### Added
+- **Per-program AI analysis in `ProgramView`** — opening any installed program now auto-runs `AIGameDetector.detect → AIDependencyAnalyzer.analyze → AIBottleAdvisor.recommend` and shows identity (publisher/engine/confidence), recommended preset/Win version/sync/DXVK, required DLLs/verbs, rationale, install plan and `Apply` + `Install Missing Dependencies` (via `Winetricks.runCommand`) actions.
+- **Batch AI + deep-scan UX in `ProgramsView`** — header shows discovered count, `Rescan Now` (deep `drive_c` scan), `AI Scan All` (batch detect), and collapsible AI results.
+
+### Changed
+- **Deep `drive_c` scan** — `Bottle.updateInstalledPrograms()` now enumerates the entire `drive_c` (pruning `windows` etc.) plus explicit `ProgramData`, `Games`/`GOG Games`, and per-user roots (`drive_c/users/*/AppData`, Desktop, etc.) and de-duplicates case-insensitively; `windows` system exes are ignored. Blocklist respected.
+- **Start Menu reconciler** — `getStartMenuPrograms()` now scans every user profile’s `AppData/Roaming/.../Start Menu` (not just `crossover`) and `BottleView.updateStartMenu()` adds missing `.lnk` targets to `bottle.programs` instead of only pinning already-discovered ones.
+- **AI remote fix & warm-up** — `AICompatibilityService` remote URL corrected from `GIACK-App/GIACK` (404) to `Einnovoeg/GIaCK` (both inline and `AICompatibilityConfig.remoteURL`); `ContentView.task` now warms `AICompatibilityService.sync()` and `RemoteDatabase.syncFromRemote()` in background and proactively re-scans all bottles on launch so pre-installed apps appear without manual Rescan.
+
+### Fixed
+- Fixed bottles with pre-installed apps outside `Program Files` showing only default programs in Overview → Programs.
+- Fixed Start Menu shortcuts pointing outside `Program Files` being silently dropped.
+- Fixed AI dependency scan never firing (orphaned kit with no UI call sites, stale remote URL, never-called `sync()`) — now per-game and batch paths are wired.
+
 ## [2.0.0] - 2026-09-07
 
 ### Added
